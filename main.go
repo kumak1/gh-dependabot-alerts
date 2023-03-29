@@ -22,37 +22,22 @@ func main() {
 	}
 
 	var host = repository.Host()
+	var owner = repository.Owner()
 	var repos = targetRepos(repository.Name())
+	var showRepositoryName = len(repos) > 1
+	var query = outputQuery()
+
 	for _, repoName := range repos {
-		if len(repos) > 1 {
+		if showRepositoryName {
 			fmt.Println(repoName)
 		}
 
-		u := &url.URL{}
-		u.Path = fmt.Sprintf("/repos/%s/%s/dependabot/alerts", repository.Owner(), repoName)
-		q := u.Query()
-
-		if ecosystem != "" {
-			q.Set("ecosystem", ecosystem)
-		}
-		if scope != "" {
-			q.Set("scope", scope)
-		}
-		if severity != "" {
-			q.Set("severity", severity)
-		}
-		if state != "" {
-			q.Set("state", state)
-		}
-		q.Set("per_page", fmt.Sprint(perPage))
-
-		u.RawQuery = q.Encode()
+		var path = targetPath(owner, repoName)
 
 		if jq == "" {
-			args := []string{"api", "--hostname", host, "--jq", ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.name, .html_url, .created_at] | @tsv", u.String()}
+			args := []string{"api", "--hostname", host, "--jq", query, path}
 			stdOut, stdErr, err := gh.Exec(args...)
 			if err != nil {
-				fmt.Println("error")
 				log.Fatal(err)
 			}
 			stdOutString := stdOut.String()
@@ -74,11 +59,10 @@ func main() {
 				_ = w.Flush()
 			}
 			if stdErrString != "" {
-				fmt.Print("stdErrString")
 				fmt.Print(stdErrString)
 			}
 		} else {
-			args := []string{"api", "--hostname", host, "--jq", jq, u.String()}
+			args := []string{"api", "--hostname", host, "--jq", query, path}
 			stdOut, stdErr, err := gh.Exec(args...)
 			if err != nil {
 				log.Fatal(err)
@@ -102,6 +86,38 @@ func targetRepos(defaultRepoName string) []string {
 	} else {
 		return repositories
 	}
+}
+
+func targetPath(owner string, repoName string) string {
+	u := &url.URL{}
+	u.Path = fmt.Sprintf("/repos/%s/%s/dependabot/alerts", owner, repoName)
+	q := u.Query()
+
+	if ecosystem != "" {
+		q.Set("ecosystem", ecosystem)
+	}
+	if scope != "" {
+		q.Set("scope", scope)
+	}
+	if severity != "" {
+		q.Set("severity", severity)
+	}
+	if state != "" {
+		q.Set("state", state)
+	}
+	q.Set("per_page", fmt.Sprint(perPage))
+
+	u.RawQuery = q.Encode()
+
+	return u.String()
+}
+
+func outputQuery() string {
+	if jq != "" {
+		return jq
+	}
+
+	return ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.name, .html_url, .created_at] | @tsv"
 }
 
 func formatIndex(index string) string {
