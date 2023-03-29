@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/cli/go-gh"
+	"github.com/cli/go-gh/pkg/repository"
 	"github.com/fatih/color"
 	flags "github.com/spf13/pflag"
 	"log"
@@ -14,25 +15,31 @@ import (
 	"time"
 )
 
+var (
+	repo         repository.Repository
+	repositories []string
+	hostname     string
+	owner        string
+	ecosystem    string
+	scope        string
+	severity     string
+	state        string
+	perPage      int
+	jq           string
+)
+
 func main() {
 	initArguments()
 
-	repository, err := gh.CurrentRepository()
-	if err != nil {
-		fmt.Println(err)
-	}
+	args := []string{"api", "--hostname", targetHostname(), "--jq", outputQuery()}
 
-	args := []string{"api", "--hostname", repository.Host(), "--jq", outputQuery()}
-	var owner = repository.Owner()
-	var repos = targetRepos(repository.Name())
-	var showRepositoryName = len(repos) > 1
-
+	var repos, showRepoName = targetRepos()
 	for _, repoName := range repos {
-		if showRepositoryName {
+		if showRepoName {
 			fmt.Println(repoName)
 		}
 
-		stdOut, stdErr, err := gh.Exec(append(args, []string{targetPath(owner, repoName)}...)...)
+		stdOut, stdErr, err := gh.Exec(append(args, []string{targetPath(repoName)}...)...)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -75,17 +82,33 @@ func printError(stdErr bytes.Buffer) {
 	}
 }
 
-func targetRepos(defaultRepoName string) []string {
-	if len(repositories) == 0 {
-		return []string{defaultRepoName}
+func targetRepos() ([]string, bool) {
+	if len(repositories) == 0 && repo != nil {
+		return []string{repo.Name()}, false
 	} else {
-		return repositories
+		return repositories, len(repositories) > 1
 	}
 }
 
-func targetPath(owner string, repoName string) string {
+func targetHostname() string {
+	if hostname == "" && repo != nil {
+		return repo.Host()
+	} else {
+		return hostname
+	}
+}
+
+func targetOwner() string {
+	if owner == "" && repo != nil {
+		return repo.Owner()
+	} else {
+		return owner
+	}
+}
+
+func targetPath(repoName string) string {
 	u := &url.URL{}
-	u.Path = fmt.Sprintf("/repos/%s/%s/dependabot/alerts", owner, repoName)
+	u.Path = fmt.Sprintf("/repos/%s/%s/dependabot/alerts", targetOwner(), repoName)
 	q := u.Query()
 
 	if ecosystem != "" {
@@ -139,18 +162,10 @@ func formatSeverity(severity string) string {
 	}
 }
 
-var (
-	repositories []string
-	ecosystem    string
-	scope        string
-	severity     string
-	state        string
-	perPage      int
-	jq           string
-)
-
 func initArguments() {
 	flags.StringArrayVarP(&repositories, "repo", "r", []string{}, "")
+	flags.StringVar(&hostname, "hostname", "", "specify github hostname")
+	flags.StringVarP(&owner, "owner", "o", "", "specify github owner")
 	flags.StringVarP(&ecosystem, "ecosystem", "e", "", "specify comma-separated list. can be: composer, go, maven, npm, nuget, pip, pub, rubygems, rust")
 	flags.StringVar(&scope, "scope", "", "specify comma-separated list. can be: development, runtime")
 	flags.StringVar(&severity, "severity", "", "specify comma-separated list. can be: low, medium, high, critical")
@@ -165,6 +180,14 @@ func initArguments() {
 	if help {
 		flags.PrintDefaults()
 		os.Exit(1)
+	}
+
+	if hostname == "" || owner == "" {
+		currentRepository, err := gh.CurrentRepository()
+		if err != nil {
+			fmt.Println(err)
+		}
+		repo = currentRepository
 	}
 }
 
