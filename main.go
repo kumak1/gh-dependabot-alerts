@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/cli/go-gh"
 	"github.com/fatih/color"
@@ -21,62 +22,56 @@ func main() {
 		fmt.Println(err)
 	}
 
-	var host = repository.Host()
+	args := []string{"api", "--hostname", repository.Host(), "--jq", outputQuery()}
 	var owner = repository.Owner()
 	var repos = targetRepos(repository.Name())
 	var showRepositoryName = len(repos) > 1
-	var query = outputQuery()
 
 	for _, repoName := range repos {
 		if showRepositoryName {
 			fmt.Println(repoName)
 		}
 
-		var path = targetPath(owner, repoName)
-
-		if jq == "" {
-			args := []string{"api", "--hostname", host, "--jq", query, path}
-			stdOut, stdErr, err := gh.Exec(args...)
-			if err != nil {
-				log.Fatal(err)
-			}
-			stdOutString := stdOut.String()
-			stdErrString := stdErr.String()
-
-			if stdOutString != "" {
-				w := new(tabwriter.Writer)
-				w.Init(os.Stdout, 4, 8, 1, '\t', 0)
-				for _, columns := range strings.Split(stdOutString, "\n") {
-					var cols = strings.Split(columns, "\t")
-					if cols[0] == "" {
-						break
-					}
-					cols[0] = formatIndex(cols[0])
-					cols[1] = formatSeverity(cols[1])
-					cols[5] = formatDate(cols[5])
-					_, _ = fmt.Fprintln(w, strings.Join(cols, "\t"))
-				}
-				_ = w.Flush()
-			}
-			if stdErrString != "" {
-				fmt.Print(stdErrString)
-			}
-		} else {
-			args := []string{"api", "--hostname", host, "--jq", query, path}
-			stdOut, stdErr, err := gh.Exec(args...)
-			if err != nil {
-				log.Fatal(err)
-			}
-			stdOutString := stdOut.String()
-			stdErrString := stdErr.String()
-
-			if stdOutString != "" {
-				fmt.Print(stdOutString)
-			}
-			if stdErrString != "" {
-				fmt.Print(stdErrString)
-			}
+		stdOut, stdErr, err := gh.Exec(append(args, []string{targetPath(owner, repoName)}...)...)
+		if err != nil {
+			log.Fatal(err)
 		}
+
+		printOut(stdOut)
+		printError(stdErr)
+	}
+}
+
+func printOut(stdOut bytes.Buffer) {
+	stdOutString := stdOut.String()
+	if stdOutString == "" {
+		return
+	}
+
+	if jq != "" {
+		fmt.Print(stdOutString)
+		return
+	}
+
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 4, 8, 1, '\t', 0)
+	for _, columns := range strings.Split(stdOutString, "\n") {
+		var cols = strings.Split(columns, "\t")
+		if cols[0] == "" {
+			break
+		}
+		cols[0] = formatIndex(cols[0])
+		cols[1] = formatSeverity(cols[1])
+		cols[5] = formatDate(cols[5])
+		_, _ = fmt.Fprintln(w, strings.Join(cols, "\t"))
+	}
+	_ = w.Flush()
+}
+
+func printError(stdErr bytes.Buffer) {
+	stdErrString := stdErr.String()
+	if stdErrString != "" {
+		fmt.Print(stdErrString)
 	}
 }
 
