@@ -93,7 +93,7 @@ func formatIndex(index string) string {
 
 func formatDate(date string) string {
 	t, _ := time.Parse(time.RFC3339, date)
-	return color.WhiteString(t.Format(time.DateOnly))
+	return color.WhiteString(t.Format("2006-01-02"))
 }
 
 func formatSeverity(severity string) string {
