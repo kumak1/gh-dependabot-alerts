@@ -26,6 +26,7 @@ var (
 	state        string
 	perPage      int
 	jq           string
+	quiet        bool
 )
 
 func main() {
@@ -33,9 +34,8 @@ func main() {
 
 	args := []string{"api", "--hostname", targetHostname(), "--jq", outputQuery()}
 
-	var repos, showRepoName = targetRepos()
-	for _, repoName := range repos {
-		if showRepoName {
+	for _, repoName := range targetRepos() {
+		if !quiet {
 			fmt.Println(repoName)
 		}
 
@@ -82,11 +82,11 @@ func printError(stdErr bytes.Buffer) {
 	}
 }
 
-func targetRepos() ([]string, bool) {
+func targetRepos() []string {
 	if len(repositories) == 0 && repo != nil {
-		return []string{repo.Name()}, false
+		return []string{repo.Name()}
 	} else {
-		return repositories, len(repositories) > 1
+		return repositories
 	}
 }
 
@@ -163,7 +163,7 @@ func formatSeverity(severity string) string {
 }
 
 func initArguments() {
-	flags.StringArrayVarP(&repositories, "repo", "r", []string{}, "")
+	flags.StringArrayVarP(&repositories, "repo", "r", []string{}, "specify github repository name")
 	flags.StringVar(&hostname, "hostname", "", "specify github hostname")
 	flags.StringVarP(&owner, "owner", "o", "", "specify github owner")
 	flags.StringVarP(&ecosystem, "ecosystem", "e", "", "specify comma-separated list. can be: composer, go, maven, npm, nuget, pip, pub, rubygems, rust")
@@ -172,6 +172,7 @@ func initArguments() {
 	flags.StringVar(&state, "state", "", "specify comma-separated list. can be: dismissed, fixed, open")
 	flags.IntVar(&perPage, "per_page", 30, "The number of results per page (max 100).")
 	flags.StringVarP(&jq, "jq", "q", "", "Query to select values from the response using jq syntax")
+	flags.BoolVar(&quiet, "quiet", false, "show only github api response")
 
 	var help bool
 	flags.BoolVarP(&help, "help", "h", false, "help")
