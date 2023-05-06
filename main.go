@@ -27,6 +27,7 @@ var (
 	perPage      int
 	jq           string
 	quiet        bool
+	sinceWeek    int
 )
 
 func main() {
@@ -60,6 +61,8 @@ func printOut(stdOut bytes.Buffer) {
 		return
 	}
 
+	filterTime, enableDateFilter := filterTime()
+
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 4, 8, 1, '\t', 0)
 	for _, columns := range strings.Split(stdOutString, "\n") {
@@ -67,9 +70,15 @@ func printOut(stdOut bytes.Buffer) {
 		if cols[0] == "" {
 			break
 		}
+
+		columnTime := parseResponseDate(cols[5])
+		if enableDateFilter && columnTime.Before(filterTime) {
+			break
+		}
+
 		cols[0] = formatIndex(cols[0])
 		cols[1] = formatSeverity(cols[1])
-		cols[5] = formatDate(cols[5])
+		cols[5] = formatDate(columnTime)
 		_, _ = fmt.Fprintln(w, strings.Join(cols, "\t"))
 	}
 	_ = w.Flush()
@@ -104,6 +113,14 @@ func targetOwner() string {
 	} else {
 		return owner
 	}
+}
+
+func filterTime() (time.Time, bool) {
+	if sinceWeek == 0 {
+		return time.Now(), false
+	}
+
+	return time.Now().AddDate(0, 0, -7*sinceWeek), true
 }
 
 func targetPath(repoName string) string {
@@ -142,8 +159,12 @@ func formatIndex(index string) string {
 	return color.GreenString("#" + index)
 }
 
-func formatDate(date string) string {
+func parseResponseDate(date string) time.Time {
 	t, _ := time.Parse(time.RFC3339, date)
+	return t
+}
+
+func formatDate(t time.Time) string {
 	return color.WhiteString(t.Format("2006-01-02"))
 }
 
@@ -173,6 +194,7 @@ func initArguments() {
 	flags.IntVar(&perPage, "per_page", 30, "The number of results per page (max 100).")
 	flags.StringVarP(&jq, "jq", "q", "", "Query to select values from the response using jq syntax")
 	flags.BoolVar(&quiet, "quiet", false, "show only github api response")
+	flags.IntVar(&sinceWeek, "since_week", 0, "specified number of weeks. Valid only if --jq is not specified.")
 
 	var help bool
 	flags.BoolVarP(&help, "help", "h", false, "help")
