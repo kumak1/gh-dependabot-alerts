@@ -10,7 +10,7 @@ gh extension install kumak1/gh-dependabot-alerts
 ## Usage
 
 ```shell
-% gh dependabot-alerts -h
+% gh dependabot-alerts -h            
   -e, --ecosystem string   specify comma-separated list. can be: composer, go, maven, npm, nuget, pip, pub, rubygems, rust
   -h, --help               help
       --hostname string    specify github hostname
@@ -21,5 +21,6 @@ gh extension install kumak1/gh-dependabot-alerts
   -r, --repo stringArray   specify github repository name
       --scope string       specify comma-separated list. can be: development, runtime
       --severity string    specify comma-separated list. can be: low, medium, high, critical
+      --since_week int     specified number of weeks. get results since specified week.
       --state string       specify comma-separated list. can be: dismissed, fixed, open
 ```
