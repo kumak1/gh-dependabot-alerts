@@ -64,7 +64,7 @@ func (r ghResult) print() {
 					break
 				}
 
-				columnTime := parseResponseDate(cols[5])
+				columnTime, _ := time.Parse(time.RFC3339, cols[5])
 				if enableDateFilter && columnTime.Before(filterTime) {
 					break
 				}
@@ -95,11 +95,6 @@ func filterTime() (time.Time, bool) {
 
 func formatIndex(index string) string {
 	return color.GreenString("#" + index)
-}
-
-func parseResponseDate(date string) time.Time {
-	t, _ := time.Parse(time.RFC3339, date)
-	return t
 }
 
 func formatDate(t time.Time) string {
