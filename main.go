@@ -3,33 +3,15 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"git.pepabo.com/kumak1/gh-dependabot-alerts/internal"
 	"github.com/cli/go-gh"
-	"github.com/cli/go-gh/pkg/repository"
 	"github.com/fatih/color"
-	flags "github.com/spf13/pflag"
 	"log"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
 	"text/tabwriter"
 	"time"
-)
-
-var (
-	repo         repository.Repository
-	args         []string
-	repositories []string
-	hostname     string
-	owner        string
-	ecosystem    string
-	scope        string
-	severity     string
-	state        string
-	perPage      int
-	jq           string
-	quiet        bool
-	sinceWeek    int
 )
 
 type ghResult struct {
@@ -39,29 +21,27 @@ type ghResult struct {
 }
 
 func main() {
-	initArguments()
+	results := make(map[string]ghResult, len(internal.RepoNames))
 
-	repoNames := targetRepos()
-	results := make(map[string]ghResult, len(repoNames))
 	var wg sync.WaitGroup
-	for _, repoName := range repoNames {
+	for _, repoName := range internal.RepoNames {
 		wg.Add(1)
 		repoName := repoName
 		go func() {
-			results[repoName] = ghExec(repoName)
+			results[repoName] = ghExec(internal.Hostname, internal.OwnerName, repoName)
 			wg.Done()
 		}()
 	}
 	wg.Wait()
 
 	// 実行結果の出力順序を、オプションの指定順に固定する
-	for _, repoName := range repoNames {
+	for _, repoName := range internal.RepoNames {
 		results[repoName].print()
 	}
 }
 
-func ghExec(repoName string) ghResult {
-	stdOut, stdErr, err := gh.Exec(append(args, []string{targetPath(repoName)}...)...)
+func ghExec(hostname string, ownerName string, repoName string) ghResult {
+	stdOut, stdErr, err := gh.Exec(internal.RequestArgs(hostname, ownerName, repoName)...)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -69,110 +49,48 @@ func ghExec(repoName string) ghResult {
 }
 
 func (r ghResult) print() {
-	if !quiet {
+	if !internal.OutputQuiet {
 		fmt.Println(r.repoName)
 	}
 
-	stdOutString := r.stdOut.String()
-	if stdOutString == "" {
-		return
-	}
+	if stdOutString := r.stdOut.String(); stdOutString != "" {
+		if internal.OutputDefault {
+			filterTime, enableDateFilter := filterTime()
+			w := new(tabwriter.Writer)
+			w.Init(os.Stdout, 4, 8, 1, '\t', 0)
+			for _, columns := range strings.Split(stdOutString, "\n") {
+				var cols = strings.Split(columns, "\t")
+				if cols[0] == "" {
+					break
+				}
 
-	if jq != "" {
-		fmt.Print(stdOutString)
-		return
-	}
+				columnTime := parseResponseDate(cols[5])
+				if enableDateFilter && columnTime.Before(filterTime) {
+					break
+				}
 
-	filterTime, enableDateFilter := filterTime()
-
-	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 4, 8, 1, '\t', 0)
-	for _, columns := range strings.Split(stdOutString, "\n") {
-		var cols = strings.Split(columns, "\t")
-		if cols[0] == "" {
-			break
+				cols[0] = formatIndex(cols[0])
+				cols[1] = formatSeverity(cols[1])
+				cols[5] = formatDate(columnTime)
+				_, _ = fmt.Fprintln(w, strings.Join(cols, "\t"))
+			}
+			_ = w.Flush()
+		} else {
+			fmt.Print(stdOutString)
 		}
-
-		columnTime := parseResponseDate(cols[5])
-		if enableDateFilter && columnTime.Before(filterTime) {
-			break
-		}
-
-		cols[0] = formatIndex(cols[0])
-		cols[1] = formatSeverity(cols[1])
-		cols[5] = formatDate(columnTime)
-		_, _ = fmt.Fprintln(w, strings.Join(cols, "\t"))
 	}
-	_ = w.Flush()
 
-	stdErrString := r.stdErr.String()
-	if stdErrString != "" {
+	if stdErrString := r.stdErr.String(); stdErrString != "" {
 		fmt.Print(stdErrString)
 	}
 }
 
-func targetRepos() []string {
-	if len(repositories) == 0 && repo != nil {
-		return []string{repo.Name()}
-	} else {
-		return repositories
-	}
-}
-
-func targetHostname() string {
-	if hostname == "" && repo != nil {
-		return repo.Host()
-	} else {
-		return hostname
-	}
-}
-
-func targetOwner() string {
-	if owner == "" && repo != nil {
-		return repo.Owner()
-	} else {
-		return owner
-	}
-}
-
 func filterTime() (time.Time, bool) {
-	if sinceWeek == 0 {
+	if internal.OutputSinceWeek == 0 {
 		return time.Now(), false
 	}
 
-	return time.Now().AddDate(0, 0, -7*sinceWeek), true
-}
-
-func targetPath(repoName string) string {
-	u := &url.URL{}
-	u.Path = fmt.Sprintf("/repos/%s/%s/dependabot/alerts", targetOwner(), repoName)
-	q := u.Query()
-
-	if ecosystem != "" {
-		q.Set("ecosystem", ecosystem)
-	}
-	if scope != "" {
-		q.Set("scope", scope)
-	}
-	if severity != "" {
-		q.Set("severity", severity)
-	}
-	if state != "" {
-		q.Set("state", state)
-	}
-	q.Set("per_page", fmt.Sprint(perPage))
-
-	u.RawQuery = q.Encode()
-
-	return u.String()
-}
-
-func outputQuery() string {
-	if jq != "" {
-		return jq
-	}
-
-	return ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.repoName, .html_url, .created_at] | @tsv"
+	return time.Now().AddDate(0, 0, -7*internal.OutputSinceWeek), true
 }
 
 func formatIndex(index string) string {
@@ -202,39 +120,3 @@ func formatSeverity(severity string) string {
 		return severity
 	}
 }
-
-func initArguments() {
-	flags.StringArrayVarP(&repositories, "repo", "r", []string{}, "specify github repository repoName")
-	flags.StringVar(&hostname, "hostname", "", "specify github hostname")
-	flags.StringVarP(&owner, "owner", "o", "", "specify github owner")
-	flags.StringVarP(&ecosystem, "ecosystem", "e", "", "specify comma-separated list. can be: composer, go, maven, npm, nuget, pip, pub, rubygems, rust")
-	flags.StringVar(&scope, "scope", "", "specify comma-separated list. can be: development, runtime")
-	flags.StringVar(&severity, "severity", "", "specify comma-separated list. can be: low, medium, high, critical")
-	flags.StringVar(&state, "state", "", "specify comma-separated list. can be: dismissed, fixed, open")
-	flags.IntVar(&perPage, "per_page", 30, "The number of results per page (max 100).")
-	flags.StringVarP(&jq, "jq", "q", "", "Query to select values from the ghResult using jq syntax")
-	flags.BoolVar(&quiet, "quiet", false, "show only github api ghResult")
-	flags.IntVar(&sinceWeek, "since_week", 0, "specified number of weeks. Valid only if --jq is not specified.")
-
-	var help bool
-	flags.BoolVarP(&help, "help", "h", false, "help")
-	flags.Parse()
-
-	if help {
-		flags.PrintDefaults()
-		os.Exit(1)
-	}
-
-	if hostname == "" || owner == "" {
-		currentRepository, err := gh.CurrentRepository()
-		if err != nil {
-			fmt.Println(err)
-		}
-		repo = currentRepository
-	}
-
-	args = []string{"api", "--hostname", targetHostname(), "--jq", outputQuery()}
-}
-
-// For more examples of using go-gh, see:
-// https://github.com/cli/go-gh/blob/trunk/example_gh_test.go
