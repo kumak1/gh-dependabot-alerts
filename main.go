@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -31,34 +32,45 @@ var (
 	sinceWeek    int
 )
 
-type response struct {
-	name   string
-	stdOut bytes.Buffer
-	stdErr bytes.Buffer
+type ghResult struct {
+	repoName string
+	stdOut   bytes.Buffer
+	stdErr   bytes.Buffer
 }
 
 func main() {
 	initArguments()
 
-	repos := targetRepos()
+	repoNames := targetRepos()
+	results := make(map[string]ghResult, len(repoNames))
+	var wg sync.WaitGroup
+	for _, repoName := range repoNames {
+		wg.Add(1)
+		repoName := repoName
+		go func() {
+			results[repoName] = ghExec(repoName)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 
-	for _, repoName := range repos {
-		res := ghExec(repoName)
-		res.print()
+	// 実行結果の出力順序を、オプションの指定順に固定する
+	for _, repoName := range repoNames {
+		results[repoName].print()
 	}
 }
 
-func ghExec(repoName string) response {
+func ghExec(repoName string) ghResult {
 	stdOut, stdErr, err := gh.Exec(append(args, []string{targetPath(repoName)}...)...)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return response{name: repoName, stdOut: stdOut, stdErr: stdErr}
+	return ghResult{repoName: repoName, stdOut: stdOut, stdErr: stdErr}
 }
 
-func (r response) print() {
+func (r ghResult) print() {
 	if !quiet {
-		fmt.Println(r.name)
+		fmt.Println(r.repoName)
 	}
 
 	stdOutString := r.stdOut.String()
@@ -160,7 +172,7 @@ func outputQuery() string {
 		return jq
 	}
 
-	return ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.name, .html_url, .created_at] | @tsv"
+	return ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.repoName, .html_url, .created_at] | @tsv"
 }
 
 func formatIndex(index string) string {
@@ -192,7 +204,7 @@ func formatSeverity(severity string) string {
 }
 
 func initArguments() {
-	flags.StringArrayVarP(&repositories, "repo", "r", []string{}, "specify github repository name")
+	flags.StringArrayVarP(&repositories, "repo", "r", []string{}, "specify github repository repoName")
 	flags.StringVar(&hostname, "hostname", "", "specify github hostname")
 	flags.StringVarP(&owner, "owner", "o", "", "specify github owner")
 	flags.StringVarP(&ecosystem, "ecosystem", "e", "", "specify comma-separated list. can be: composer, go, maven, npm, nuget, pip, pub, rubygems, rust")
@@ -200,8 +212,8 @@ func initArguments() {
 	flags.StringVar(&severity, "severity", "", "specify comma-separated list. can be: low, medium, high, critical")
 	flags.StringVar(&state, "state", "", "specify comma-separated list. can be: dismissed, fixed, open")
 	flags.IntVar(&perPage, "per_page", 30, "The number of results per page (max 100).")
-	flags.StringVarP(&jq, "jq", "q", "", "Query to select values from the response using jq syntax")
-	flags.BoolVar(&quiet, "quiet", false, "show only github api response")
+	flags.StringVarP(&jq, "jq", "q", "", "Query to select values from the ghResult using jq syntax")
+	flags.BoolVar(&quiet, "quiet", false, "show only github api ghResult")
 	flags.IntVar(&sinceWeek, "since_week", 0, "specified number of weeks. Valid only if --jq is not specified.")
 
 	var help bool
