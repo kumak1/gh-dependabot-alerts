@@ -15,10 +15,10 @@ var (
 	OwnerName        string
 	rawQuery         string
 	outputQuery      string
-	OutputDefault    bool
-	OutputQuiet      bool
-	EnableTimeFilter bool
-	FilterTime       time.Time
+	outputDefault    bool
+	outputQuiet      bool
+	enableTimeFilter bool
+	filterTime       time.Time
 )
 
 func init() {
@@ -37,7 +37,7 @@ func init() {
 	state := pflag.String("state", "", "specify comma-separated list. can be: dismissed, fixed, open")
 	perPage := pflag.Int("per_page", 30, "The number of results per page (max 100).")
 
-	pflag.BoolVar(&OutputQuiet, "quiet", false, "show only github api results")
+	pflag.BoolVar(&outputQuiet, "quiet", false, "show only github api results")
 
 	pflag.Parse()
 
@@ -62,14 +62,14 @@ func init() {
 		OwnerName = *owner
 	}
 	if *jq == "" {
-		OutputDefault = true
+		outputDefault = true
 		outputQuery = ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.repoName, .html_url, .created_at] | @tsv"
 	} else {
 		outputQuery = *jq
 	}
 	if *sinceWeek > 0 {
-		EnableTimeFilter = true
-		FilterTime = time.Now().AddDate(0, 0, *sinceWeek*-7)
+		enableTimeFilter = true
+		filterTime = time.Now().AddDate(0, 0, *sinceWeek*-7)
 	}
 
 	queryValues := url.Values{}
