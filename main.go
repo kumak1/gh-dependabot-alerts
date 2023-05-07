@@ -17,6 +17,7 @@ import (
 
 var (
 	repo         repository.Repository
+	args         []string
 	repositories []string
 	hostname     string
 	owner        string
@@ -30,28 +31,37 @@ var (
 	sinceWeek    int
 )
 
+type response struct {
+	name   string
+	stdOut bytes.Buffer
+	stdErr bytes.Buffer
+}
+
 func main() {
 	initArguments()
 
-	args := []string{"api", "--hostname", targetHostname(), "--jq", outputQuery()}
+	repos := targetRepos()
 
-	for _, repoName := range targetRepos() {
-		if !quiet {
-			fmt.Println(repoName)
-		}
-
-		stdOut, stdErr, err := gh.Exec(append(args, []string{targetPath(repoName)}...)...)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		printOut(stdOut)
-		printError(stdErr)
+	for _, repoName := range repos {
+		res := ghExec(repoName)
+		res.print()
 	}
 }
 
-func printOut(stdOut bytes.Buffer) {
-	stdOutString := stdOut.String()
+func ghExec(repoName string) response {
+	stdOut, stdErr, err := gh.Exec(append(args, []string{targetPath(repoName)}...)...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return response{name: repoName, stdOut: stdOut, stdErr: stdErr}
+}
+
+func (r response) print() {
+	if !quiet {
+		fmt.Println(r.name)
+	}
+
+	stdOutString := r.stdOut.String()
 	if stdOutString == "" {
 		return
 	}
@@ -82,10 +92,8 @@ func printOut(stdOut bytes.Buffer) {
 		_, _ = fmt.Fprintln(w, strings.Join(cols, "\t"))
 	}
 	_ = w.Flush()
-}
 
-func printError(stdErr bytes.Buffer) {
-	stdErrString := stdErr.String()
+	stdErrString := r.stdErr.String()
 	if stdErrString != "" {
 		fmt.Print(stdErrString)
 	}
@@ -212,6 +220,8 @@ func initArguments() {
 		}
 		repo = currentRepository
 	}
+
+	args = []string{"api", "--hostname", targetHostname(), "--jq", outputQuery()}
 }
 
 // For more examples of using go-gh, see:
