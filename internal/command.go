@@ -6,17 +6,19 @@ import (
 	"github.com/spf13/pflag"
 	"net/url"
 	"os"
+	"time"
 )
 
 var (
-	RepoNames       []string
-	Hostname        string
-	OwnerName       string
-	rawQuery        string
-	outputQuery     string
-	OutputDefault   bool
-	OutputQuiet     bool
-	OutputSinceWeek int
+	RepoNames        []string
+	Hostname         string
+	OwnerName        string
+	rawQuery         string
+	outputQuery      string
+	OutputDefault    bool
+	OutputQuiet      bool
+	EnableTimeFilter bool
+	FilterTime       time.Time
 )
 
 func init() {
@@ -27,6 +29,7 @@ func init() {
 	host := pflag.String("hostname", "", "specify github hostname")
 	owner := pflag.StringP("owner", "o", "", "specify github owner")
 	jq := pflag.StringP("jq", "q", "", "Query to select values from the results using jq syntax")
+	sinceWeek := pflag.Int("since_week", 0, "specified number of weeks. Valid only if --jq is not specified.")
 
 	ecosystem := pflag.StringP("ecosystem", "e", "", "specify comma-separated list. can be: composer, go, maven, npm, nuget, pip, pub, rubygems, rust")
 	scope := pflag.String("scope", "", "specify comma-separated list. can be: development, runtime")
@@ -35,7 +38,6 @@ func init() {
 	perPage := pflag.Int("per_page", 30, "The number of results per page (max 100).")
 
 	pflag.BoolVar(&OutputQuiet, "quiet", false, "show only github api results")
-	pflag.IntVar(&OutputSinceWeek, "since_week", 0, "specified number of weeks. Valid only if --jq is not specified.")
 
 	pflag.Parse()
 
@@ -60,10 +62,14 @@ func init() {
 		OwnerName = *owner
 	}
 	if *jq == "" {
-		outputQuery = ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.repoName, .html_url, .created_at] | @tsv"
 		OutputDefault = true
+		outputQuery = ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.repoName, .html_url, .created_at] | @tsv"
 	} else {
 		outputQuery = *jq
+	}
+	if *sinceWeek > 0 {
+		EnableTimeFilter = true
+		FilterTime = time.Now().AddDate(0, 0, *sinceWeek*-7)
 	}
 
 	queryValues := url.Values{}

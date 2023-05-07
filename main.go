@@ -55,7 +55,6 @@ func (r ghResult) print() {
 
 	if stdOutString := r.stdOut.String(); stdOutString != "" {
 		if internal.OutputDefault {
-			filterTime, enableDateFilter := filterTime()
 			w := new(tabwriter.Writer)
 			w.Init(os.Stdout, 4, 8, 1, '\t', 0)
 			for _, columns := range strings.Split(stdOutString, "\n") {
@@ -65,7 +64,7 @@ func (r ghResult) print() {
 				}
 
 				columnTime, _ := time.Parse(time.RFC3339, cols[5])
-				if enableDateFilter && columnTime.Before(filterTime) {
+				if internal.EnableTimeFilter && columnTime.Before(internal.FilterTime) {
 					break
 				}
 
@@ -83,14 +82,6 @@ func (r ghResult) print() {
 	if stdErrString := r.stdErr.String(); stdErrString != "" {
 		fmt.Print(stdErrString)
 	}
-}
-
-func filterTime() (time.Time, bool) {
-	if internal.OutputSinceWeek == 0 {
-		return time.Now(), false
-	}
-
-	return time.Now().AddDate(0, 0, -7*internal.OutputSinceWeek), true
 }
 
 func formatIndex(index string) string {
