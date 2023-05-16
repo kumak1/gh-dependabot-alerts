@@ -33,14 +33,14 @@ func (r ghResult) Print() {
 					break
 				}
 
-				columnTime, _ := time.Parse(time.RFC3339, cols[5])
+				columnTime, _ := time.Parse(time.RFC3339, cols[6])
 				if enableTimeFilter && columnTime.Before(filterTime) {
 					break
 				}
 
 				cols[0] = formatIndex(cols[0])
 				cols[1] = formatSeverity(cols[1])
-				cols[5] = formatDate(columnTime)
+				cols[6] = formatDate(columnTime)
 				_, _ = fmt.Fprintln(w, strings.Join(cols, "\t"))
 			}
 			_ = w.Flush()

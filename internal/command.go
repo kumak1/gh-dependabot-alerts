@@ -63,7 +63,7 @@ func init() {
 	}
 	if *jq == "" {
 		outputDefault = true
-		outputQuery = ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.repoName, .html_url, .created_at] | @tsv"
+		outputQuery = ".[] | [.number, .security_advisory.severity, .dependency.package.ecosystem, .dependency.package.name, .dependency.package.repoName, .html_url, .created_at] | @tsv"
 	} else {
 		outputQuery = *jq
 	}
