@@ -2,7 +2,7 @@ package internal
 
 import (
 	"fmt"
-	"github.com/cli/go-gh"
+	"github.com/cli/go-gh/v2/pkg/repository"
 	"github.com/spf13/pflag"
 	"net/url"
 	"os"
@@ -22,7 +22,7 @@ var (
 )
 
 func init() {
-	currentRepository, _ := gh.CurrentRepository()
+	currentRepository, _ := repository.Current()
 
 	help := pflag.BoolP("help", "h", false, "help")
 	repos := pflag.StringArrayP("repo", "r", []string{}, "specify github repository repoName")
@@ -46,18 +46,18 @@ func init() {
 		os.Exit(1)
 	}
 
-	if len(*repos) == 0 && currentRepository != nil {
-		RepoNames = []string{currentRepository.Name()}
+	if len(*repos) == 0 {
+		RepoNames = []string{currentRepository.Name}
 	} else {
 		RepoNames = *repos
 	}
-	if *host == "" && currentRepository != nil {
-		Hostname = currentRepository.Host()
+	if *host == "" {
+		Hostname = currentRepository.Host
 	} else {
 		Hostname = *host
 	}
-	if *owner == "" && currentRepository != nil {
-		OwnerName = currentRepository.Owner()
+	if *owner == "" {
+		OwnerName = currentRepository.Owner
 	} else {
 		OwnerName = *owner
 	}

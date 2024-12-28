@@ -3,7 +3,7 @@ module git.pepabo.com/kumak1/gh-dependabot-alerts
 go 1.23
 
 require (
-	github.com/cli/go-gh v1.2.1
+	github.com/cli/go-gh/v2 v2.11.1
 	github.com/fatih/color v1.18.0
 	github.com/spf13/pflag v1.0.5
 )

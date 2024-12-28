@@ -3,7 +3,7 @@ package internal
 import (
 	"bytes"
 	"fmt"
-	"github.com/cli/go-gh"
+	"github.com/cli/go-gh/v2"
 	"log"
 	"os"
 	"strings"
